@@ -1,0 +1,13 @@
+{
+  "materialVersion": 2,
+  "milk": 5,
+  "softLight": 15,
+  "edgeReflection": 100,
+  "lightSpread": 100,
+  "readerWhite": 20,
+  "white": [255, 255, 255],
+  "nativeGlassAlphaMin": 202,
+  "nativeGlassAlphaMax": 254,
+  "frostCurve": 3,
+  "popoverBlurPx": 18
+}

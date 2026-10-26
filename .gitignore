@@ -1,0 +1,14 @@
+node_modules/
+.local/
+.test-output/
+research/
+garden-gpt-image-2/
+__pycache__/
+*.pyc
+*.pyo
+*.tgz
+.env
+.env.*
+!.env.example
+python/vendor/tools/*/bin/
+python/vendor/tools/renpy/vendor/

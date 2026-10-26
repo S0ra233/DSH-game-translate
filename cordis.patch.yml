@@ -1,0 +1,7 @@
+- insert:
+    - id: dsh-game-translate
+      name: dsh-game-translate
+      config:
+        pythonExecutable: python
+        allowedGameRoots: []
+        allowedWorkRoots: []

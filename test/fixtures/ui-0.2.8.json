@@ -1,0 +1,7 @@
+{
+  "source": "dsh-translate-0.2.8.tgz",
+  "scope": "Original chrome, menus, dialogs, settings and control CSS; approved reader/material changes excluded",
+  "controls": "62aef484957226529764f231fe3a2f50d6efd9d74526e161cab0ab98124889bd",
+  "controlStyles": "aa7b0dd7d99c8debb3bedc14ce07daf13e7492ada85fc814ccd3ab495dba1ce7",
+  "chrome": "459da300b8832ed3bd32ded4557eab2c011921ac39b282d966f910669a211dd9"
+}

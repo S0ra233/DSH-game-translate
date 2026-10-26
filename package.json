@@ -1,0 +1,100 @@
+{
+  "name": "dsh-game-translate",
+  "version": "0.3.8",
+  "description": "Conversation-bound game translation tools powered by the portable Game Translation Core",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./service": "./src/service.js",
+    "./client": "./dist/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./typert": "./src/remote-host.js",
+    "./remote": "./src/remote-info.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-input-trigger",
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ]
+    }
+  },
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": "0.2.1-rc.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/dsh-commands": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-skill": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.3"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "build": "node scripts/build-client.mjs",
+    "pack:local": "npm pack --ignore-scripts"
+  },
+  "files": [
+    "src",
+    "dist/client.js",
+    "dist/translation-ui.html",
+    "dist/translation-ui.js",
+    "python",
+    "skills",
+    "locale",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "docs",
+    "licenses",
+    "native/wpf",
+    "!native/wpf/Dialogs.cs",
+    "!native/wpf/TranslationWindow.cs",
+    "!native/wpf/Window.xaml",
+    "!native/wpf/TranslationWindow.exe",
+    "!native/wpf/TranslationWindow.exe.config",
+    "!native/wpf/TranslationWindow-0.3.1.exe",
+    "!native/wpf/TranslationWindow-0.3.1.exe.config",
+    "!native/wpf/TranslationWindow-0.3.2.exe",
+    "!native/wpf/TranslationWindow-0.3.2.exe.config",
+    "!native/wpf/TranslationWindow-0.3.6.exe",
+    "!native/wpf/TranslationWindow-0.3.6.exe.config"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-llm-pi-ai": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-subagent": "0.2.1-rc.3",
+    "@earendil-works/pi-ai": "1.4.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh": "^0.2.1-rc.3",
+    "esbuild": "^0.25.12"
+  },
+  "author": "S0ra233",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/S0ra233/DSH-game-translate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/S0ra233/DSH-game-translate/issues"
+  },
+  "homepage": "https://github.com/S0ra233/DSH-game-translate#readme"
+}
