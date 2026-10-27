@@ -43,11 +43,19 @@ The default Python command is `python`. If needed, override the plugin's configu
     cancelGraceMs: 5000
 ```
 
-An explicit data directory keeps project state outside the installed package. Existing users should retain their current path. The optional `nativeWindowIcon` setting can point to the icon in your own DSH installation.
+The default data directory is `~/.dsh/plugin-data/DSH-game-translate` (under `DSH_HOME` when set), independent of the installed package and version. An explicit `dataDirectory` always takes precedence and is retained across updates. On first use, any surviving legacy package-local `.local` state is copied without deleting the source; existing default state is never overwritten. Multiple legacy stores require an explicit choice. Before upgrading an older version, preserve its original data directory so a package manager cannot remove the only copy with the old package. The optional `nativeWindowIcon` setting can point to the icon in your own DSH installation.
 
 The plugin needs the tools, commands, skills, llm, and credentials services. Native delegation also needs subagents; the main Agent can translate without delegation.
 
 ## Open and initialize
+
+After locating a search result, the complete current reading group remains reachable in both directions. Larger groups load around the viewport, with the full source outline still available for direct navigation. Reading continues after the search pane is closed. Saves, Agent updates, and page loading preserve the reading position; explicit search navigation centres the target. Unsaved edits prevent replacement or eviction of their paragraph.
+
+Search preparation runs in the background. New input replaces obsolete queries while reusing an ongoing build for the same project. The versioned search cache can be rebuilt independently of bindings, translations, manual-edit markers, and model configuration.
+
+The 18px open arc beside Search shows task progress. Hover for a summary, or click to pin the detail card and switch between the entire project and the current reading group. Clicking a status opens Search with that filter. Click the arc again, click outside, or press Esc to close the card. Its material follows the white/glass setting.
+
+Only Core tasks marked PROCESSED count as completed; review, untranslated, and error states remain separate. Totals include independent speaker-name tasks and can differ from the merged paragraphs on screen. Manual edits are provenance markers within those states. Progress uses cached reading-group counts and updates after saves and Agent changes. Hovering and opening the card neither scan text nor call a model. Increase/decrease animations stop when settled and respect reduced-motion preferences.
 
 Enter `/翻译` in a root conversation with a working directory. The window currently uses Chinese labels. Bare `/translation` also opens the window; parameterized commands such as `/translation status` remain available.
 

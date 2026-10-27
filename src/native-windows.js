@@ -7,7 +7,7 @@ import { cleanAppearance } from './appearance.js';
 export { cleanAppearance } from './appearance.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
-const PASSIVE = new Set(['snapshot', 'scenes', 'scene', 'reading-groups', 'reading-group', 'save-model', 'edit-translation']);
+const PASSIVE = new Set(['snapshot', 'scenes', 'scene', 'reading-groups', 'reading-group', 'save-model', 'edit-translation', 'search-query', 'search-locate', 'search-close']);
 const PAID = new Set(['initialize', 'translate', 'build']);
 
 /** 一个根对话一个受控原生进程；仅 stdio 通信，不开放 HTTP 端口或页面令牌。 */
@@ -25,6 +25,7 @@ export class NativeWindows {
   async open(sessionId, supplied = {}, signal) {
     if (this.platform !== 'win32') return { status: 'unsupported' };
     if (this.closed) throw new Error('翻译插件已关闭');
+    await this.service.storageReady?.();
     const previous = this.windows.get(String(sessionId));
     if (previous && !previous.stopping) return this.focus(previous);
     if (previous) await previous.done;

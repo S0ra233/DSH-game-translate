@@ -1,0 +1,80 @@
+import './workspace.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { access, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { build } from 'esbuild';
+import { headlessCheck } from './headless-check.mjs';
+
+test('正式 App：B/18、统计缓存、材质继承、进度筛选、手改同步和浮层生命周期', {timeout:45000}, async t => {
+  const browser=process.env.DSH_TEST_BROWSER??'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+  try{await access(browser);}catch{t.skip('需要本机 Chromium');return;}
+  const folder=await mkdtemp(resolve('.test-output/progress-ui-'));
+  const source=`import React from 'react';import {createRoot} from 'react-dom/client';
+    import {App} from ${JSON.stringify(resolve('src/client/App.jsx').replaceAll('\\','/'))};
+    const groups=[{id:'g1',title:'第一阅读组',scene_ids:['s1'],sections:[],counts:{PROCESSED:400,NEEDS_HUMAN:350,NONE:200,ERROR:50},manual_count:10},
+      {id:'g2',title:'第二阅读组',scene_ids:['s2'],sections:[],counts:{PROCESSED:600,NEEDS_HUMAN:500,NONE:850,ERROR:50},manual_count:20}];
+    let tasks=[{id:'t1',scene_id:'s1',type:'dialogue',text:'未翻译的文本。',translation:'',status:'NONE',source_hash:'a',revision:0},
+      {id:'t2',scene_id:'s2',type:'dialogue',text:'完成的文本。',translation:'测试译文。',status:'PROCESSED',source_hash:'b',revision:1}];
+    let version=1,bound=true;const calls=[],subscribers=new Set();const notify=kind=>{for(const fn of subscribers)fn(kind);};
+    const api=async(action,args={})=>{calls.push({action,args});
+      if(action==='snapshot')return {state:{version,binding:bound?{project_id:'p',phase:'project_ready'}:null},stamp:String(version),models:[]};
+      if(action==='reading-groups')return {project_id:'p',groups:groups.map(g=>({...g,counts:{...g.counts}})),next_offset:null};
+      if(action==='reading-group')return {project_id:'p',group:groups.find(g=>g.id===args.group_id),sections:[],tasks:tasks.filter(t=>groups.find(g=>g.id===args.group_id).scene_ids.includes(t.scene_id)),next_offset:null};
+      if(action==='search-query')return {project_id:'p',generation:'v',query_key:JSON.stringify(args.query),active:true,hits:[],total:0,next_cursor:null};
+      if(action==='search-close')return {released:true};
+      if(action==='edit-translation'){const task=tasks.find(t=>t.id===args.task_id);task.translation=args.translation;task.status='PROCESSED';task.revision++;groups[0].counts.PROCESSED++;groups[0].counts.NONE--;groups[0].manual_count++;version++;return {task:{...task},changed:true};}
+      throw Error('Unexpected action '+action);
+    };api.subscribe=fn=>{subscribers.add(fn);return()=>subscribers.delete(fn);};
+    document.documentElement.dataset.materialHost='native';localStorage.clear();
+    createRoot(document.getElementById('root')).render(<App api={api} sessionId="progress" nativeChrome nativeMaterial/>);
+    const pause=ms=>new Promise(r=>setTimeout(r,ms)),check=(ok,label)=>{if(!ok)throw Error(label)};
+    const $=selector=>document.querySelector(selector),progress=()=>$('.task-progress-card[data-open=true]');
+    const open=async()=>{if(!progress())$('[aria-label="任务进度"]').click();await pause(210);};
+    const scope=async text=>{[...document.querySelectorAll('.task-progress-scope button')].find(b=>b.textContent===text).click();await pause(720);};
+    const theme=async text=>{$('[aria-label="更多操作"]').click();await pause(25);[...document.querySelectorAll('.menu-bottom button')].find(b=>b.textContent===text).click();await pause(25);const menu=getComputedStyle($('.more-menu'));const reference={background:menu.backgroundColor,image:menu.backgroundImage,blur:menu.backdropFilter};$('[aria-label="更多操作"]').click();await pause(190);await open();return reference;};
+    (async()=>{
+      await pause(850);const entry=$('[aria-label="任务进度"]');check(!entry.disabled,'initialized entry');
+      check(getComputedStyle(entry.querySelector('svg')).width==='18px','approved 18 px');
+      const reads=calls.length,original=$('[data-task-id="t1"]');
+      entry.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));await pause(150);check(!$('.task-progress-tip[data-open=true]'),'hover delay');await pause(180);check($('.task-progress-tip[data-open=true]'),'hover summary');
+      check($('.task-progress-tip strong').textContent==='33% 已处理','Core processed only');
+      await open();check($('.task-progress-number>span').textContent==='33','whole project includes unloaded groups');
+      check($('.task-progress-overview p').textContent.includes('1,000 / 3,000'),'real group totals');
+      check($('.task-progress-footer').textContent.includes('人工修改 30'),'manual provenance total');
+      check(calls.length===reads,'hover and opening use cached counts');
+      check([...document.querySelectorAll('.task-progress-state>small')].reduce((sum,node)=>sum+parseInt(node.textContent),0)===100,'shares sum to 100');
+      check($('[data-progress-status="PROCESSED"]>small').textContent===$('.task-progress-number>span').textContent+'%','processed share agrees with headline');
+      await scope('当前阅读组');check($('.task-progress-overview p').textContent.includes('400 / 1,000'),'group scope');check(calls.length===reads,'scope adds no reads');
+      check($('[data-task-id="t1"]')===original,'progress controls do not remount reader');
+      entry.click();await pause(180);check(!progress(),'second click closes');await open();
+      document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pause(180);check(!progress(),'Esc closes');
+      await open();$('.reader-scroll').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));await pause(180);check(!progress(),'outside closes');
+      const glass=await theme('玻璃质感'),card=getComputedStyle(progress());
+      check(card.backgroundColor===glass.background&&card.backgroundImage===glass.image&&card.backdropFilter===glass.blur,'same glass material as existing menu');
+      const width=$('.reader-scroll').getBoundingClientRect().width;await theme('纯白');check(getComputedStyle(progress()).backgroundColor==='rgb(255, 255, 255)','white material');check($('.reader-scroll').getBoundingClientRect().width===width,'theme preserves reader width');
+      await scope('全工程');$('[data-progress-status="NEEDS_HUMAN"]').click();await pause(450);
+      check($('.search-pane[data-open=true]'),'progress opens search');const query=calls.filter(c=>c.action==='search-query').at(-1).args.query;
+      check(query.statuses.join(',')==='NEEDS_HUMAN'&&query.scope==='project','correct status filter');check(Object.values(query.fields).every(f=>!f.text),'old text fields cleared');
+      await open();document.getElementById('root').style.cssText='width:620px;height:450px';await pause(150);
+      const bounds=progress().getBoundingClientRect(),host=$('.dsh-translate').getBoundingClientRect();check(bounds.left>=host.left&&bounds.right<=host.right&&bounds.bottom<=host.bottom,'narrow/short card fits host');
+      document.getElementById('root').style.cssText='';entry.click();await pause(180);
+      $('.translation-edit-button').click();await pause(50);const area=$('textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(area,'人工保存进度测试');area.dispatchEvent(new Event('input',{bubbles:true}));await pause(30);
+      await open();check([...document.querySelectorAll('.task-progress-state')].every(b=>b.disabled),'dirty edit prevents status navigation');
+      entry.click();await pause(180);$('.edit-actions .primary').click();await pause(1100);await open();
+      check($('.task-progress-overview p').textContent.includes('1,001 / 3,000'),'manual save updates completion');check($('.task-progress-footer').textContent.includes('人工修改 31'),'manual source count updates');
+      notify('window-hidden');await pause(190);check(!progress(),'native hide closes card');notify('refresh');await pause(450);await open();check(progress(),'restored window can reopen progress');
+      bound=false;version++;notify('refresh');await pause(450);check(entry.isConnected===false||$('[aria-label="任务进度"]').disabled,'unbind clears progress control');
+      check(!document.querySelector('.progress-lab'),'no demo controls in plugin');check(!calls.some(c=>['initialize','translate','build'].includes(c.action)),'no paid work');
+      document.getElementById('result').textContent=JSON.stringify({ok:true,actualDSH:false,modelRequests:0});
+    })().catch(error=>document.getElementById('result').textContent=JSON.stringify({error:error.message,stack:error.stack}));`;
+  await writeFile(join(folder,'check.jsx'),source);
+  await build({entryPoints:[join(folder,'check.jsx')],outfile:join(folder,'check.js'),bundle:true,platform:'browser',format:'iife',jsx:'transform',define:{'process.env.NODE_ENV':'"production"'}});
+  const html=join(folder,'check.html');
+  await writeFile(html,`<!doctype html><html><meta charset="utf-8"><style>html,body,#root{height:100%;margin:0}${await readFile('src/client/surface.css','utf8')}</style><div id="root"></div><pre id="result">pending</pre><script src="./check.js"></script></html>`);
+  const output=await headlessCheck(browser,folder,html);
+  await writeFile(join(folder,'result.html'),output);
+  const encoded=/<pre id="result">([^<]*)<\/pre>/.exec(output)?.[1];
+  const report=JSON.parse(encoded.replaceAll('&quot;','"').replaceAll('&gt;','>').replaceAll('&lt;','<').replaceAll('&amp;','&'));
+  assert.equal(report.ok,true,report.error+'\n'+(report.stack??''));
+});

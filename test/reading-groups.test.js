@@ -11,6 +11,7 @@ import { NativeWindows } from '../src/native-windows.js';
 import { registerUiHost } from '../src/ui-host.js';
 import { readReadingGroupPages } from '../src/client/scene-reader.js';
 import { nativeRequest } from './native-request.mjs';
+import { ReadingWindow } from '../src/client/reading-window.js';
 
 test('通用分组保留来源/事件/显式分支边界、完整长 Scene、孤立姓名和不可变输入，译文变化不改分组', async () => {
   const script = `import sys,json,copy
@@ -65,11 +66,37 @@ test('真实宿主/Worker/Core：150 个标签变成 2 组，分页覆盖、手�
     const begin = await call('begin', { game_dir: game }); const ready = await call('prepare', { request_id: begin.request.request_id }); const pid = ready.binding.project_id;
     const listed = await api('reading-groups', { project_id: pid });
     assert.equal(listed.original_scene_count, 150); assert.equal(listed.total, 2);
+    assert.deepEqual(listed.groups.map(group => group.manual_count), [0, 0]);
     const first = listed.groups[0]; assert.equal(first.scene_ids.length, 140); assert.equal(first.paragraph_count, 140);
     const published = [], meta = []; let reads = 0;
     await readReadingGroupPages({ projectId: pid, groupId: first.id, current: () => true, sections: value => meta.push(value), publish: value => published.push(value), api: async (...args) => { reads++; return api(...args); } });
     assert.equal(reads, 2); assert.equal(meta[0].length, 140); assert.equal(published[0].length, 200); assert.equal(published.at(-1).length, 280);
     assert.equal(new Set(published.at(-1).map(task => task.id)).size, 280);
+    const query = await service.searchObserved(observation, 'search_query', { project_id: pid, query: { scope: 'group', group_id: first.id } });
+    const middle = published.at(-1).filter(task => task.type === 'dialogue')[70];
+    const local = await service.searchObserved(observation, 'search_locate', { project_id: pid, task_id: middle.id, generation: query.generation, query: {} });
+    assert.equal(local.window.total, 140); assert.equal(local.window.end-local.window.start, 40);
+    const throughNative = await api('search-locate', { project_id: pid, generation: query.generation, window_cursor: local.window.after, direction: 'after' });
+    assert.equal(throughNative.window.start, local.window.end);
+    const lastSection = await service.searchObserved(observation, 'search_locate', { project_id: pid, group_id: first.id, section_id: first.scene_ids.at(-1), rebase: true, query: {} });
+    assert.ok(lastSection.tasks.some(task => task.scene_id === first.scene_ids.at(-1)));
+    const model = new ReadingWindow(local), positions = new Set(local.positions.map(([,position]) => position));
+    let page = local;
+    while (page.window.after) {
+      page = await service.searchObserved(observation, 'search_locate', { project_id: pid, generation: query.generation, window_cursor: page.window.after, direction: 'after' });
+      for (const [,position] of page.positions) positions.add(position);
+      model.add(page, 'after');
+    }
+    page = local;
+    while (page.window.before) {
+      page = await service.searchObserved(observation, 'search_locate', { project_id: pid, generation: query.generation, window_cursor: page.window.before, direction: 'before' });
+      for (const [,position] of page.positions) positions.add(position);
+    }
+    assert.equal(positions.size, 140); assert.equal(Math.min(...positions), 0); assert.equal(Math.max(...positions), 139);
+    const resultRows = (await import('../src/client/reading-rows.js')).readingRows(model.view().tasks);
+    assert.ok(resultRows.every(row => row.speakerTask?.text === 'ミナ'));
+    assert.ok(model.pages.length <= 6); assert.equal(new Set(model.view().tasks.map(task => task.id)).size, model.view().tasks.length);
+    await assert.rejects(service.searchObserved(observation, 'search_locate', { project_id: pid, generation: query.generation, window_cursor: JSON.stringify({ project_id: pid, generation: 'old', group_id: first.id, position: 0 }) }), /已更新/);
     const resolved = await call('resolve_reading_groups', { project_id: pid, group_ids: [first.id] });
     assert.deepEqual(resolved.scene_batches.map(batch => batch.length), [100, 40]); assert.deepEqual(resolved.scene_ids, first.scene_ids);
     for (const task of published[0].filter(task => task.scene_id === first.scene_ids[0])) {
@@ -79,6 +106,7 @@ test('真实宿主/Worker/Core：150 个标签变成 2 组，分页覆盖、手�
     const changed = await api('reading-groups', { project_id: pid });
     assert.deepEqual(changed.groups.map(group => group.id), listed.groups.map(group => group.id));
     assert.equal(changed.groups[0].counts.PROCESSED, 2);
+    assert.deepEqual(changed.groups.map(group => group.manual_count), [2, 0]);
     const inbox = []; let handler;
     registerUiHost({ commands: { register(command) { handler = command.handler; } } }, service);
     const agent = { id: record.sessionId, session: { header: observation.header, snapshotEvents: () => [] }, followup: value => inbox.push(value) };

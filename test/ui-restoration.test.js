@@ -5,12 +5,19 @@ import { createHash } from 'node:crypto';
 import { createHostBridge } from '../src/client/webview-bridge.js';
 
 const hash = text => createHash('sha256').update(text).digest('hex');
-test('阅读区之外保留 0.2.8 菜单、设置与布局，仅纳入获准的编辑保护和材质变化', async () => {
+test('保留原菜单与设置，仅排除已获准的检索和进度入口、阅读分栏、编辑保护和材质变化', async () => {
   const [app, css, raw] = await Promise.all([
     readFile('src/client/App.jsx', 'utf8'), readFile('src/client/surface.css', 'utf8'), readFile('test/fixtures/ui-0.2.8.json', 'utf8'),
   ]);
   const baseline = JSON.parse(raw);
   const controls = app.slice(app.indexOf('  return <div ref={root}'), app.indexOf('\nfunction emptyModel()'))
+    .replace(/^[ \t]*<button className=\{`icon-pill search-entry[^\n]*\n/m, '')
+    .replace(/^[ \t]*<TaskProgress\b[^\n]*\n/m, '')
+    .replace(/    <div className="translation-workspace"[\s\S]*?\n    <\/div>/, block => {
+      const main = block.match(/      <main [\s\S]*?\n      <\/main>/)?.[0];
+      assert.ok(main, 'search layout retains the original reader');
+      return main.split('\n').filter(line => !line.includes('className="reader-virtual-space"')).map(line => line.slice(2)).join('\n').replace(' ref={reader}', '').replace(' onScroll={onReaderScroll}', '');
+    })
     .replaceAll('<Select', '<select').replaceAll('</Select>', '</select>')
     .replaceAll('shownDialog', 'dialog').replaceAll('shownMenu', 'menu')
     .replace(/ data-open=\{(?:menu|Boolean\(dialog\))\} aria-hidden=\{!(?:menu|dialog)\} inert=\{(?:menu|dialog) \? undefined : ''\}/g, '')

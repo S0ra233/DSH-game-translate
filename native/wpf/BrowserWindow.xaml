@@ -1,4 +1,4 @@
-<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="游戏翻译 — DeepSeek Harness" Width="1120" Height="800" MinWidth="640" MinHeight="460" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Topmost="False" ShowInTaskbar="True" AllowsTransparency="False" Background="Transparent" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13" Foreground="#252528" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="DSH-game-translate" Width="1120" Height="800" MinWidth="640" MinHeight="460" WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize" Topmost="False" ShowInTaskbar="True" AllowsTransparency="False" Background="Transparent" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13" Foreground="#252528" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <shell:WindowChrome.WindowChrome>
     <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="7" GlassFrameThickness="-1" UseAeroCaptionButtons="False" />
   </shell:WindowChrome.WindowChrome>
@@ -71,7 +71,7 @@
         </Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
           <Image x:Name="AppIcon" Width="18" Height="18" Margin="0,0,9,0" />
-          <TextBlock Text="游戏翻译" FontSize="12" Foreground="#51515A" />
+          <TextBlock Text="DSH-game-translate" FontSize="12" Foreground="#51515A" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,6,0">
           <Button x:Name="Minimize" Style="{StaticResource WindowButton}" ToolTip="最小化">

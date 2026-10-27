@@ -119,3 +119,154 @@ html[data-material-host=native] .dsh-translate[data-surface=glass] .reader-scrol
 @starting-style{.dsh-translate :is(.more-menu,.select-popover)[data-open=true]{opacity:0;transform:translateY(-4px) scale(.985)}.dsh-translate .dialog-layer[data-open=true]{opacity:0}.dsh-translate .dialog-layer[data-open=true]>.dialog{transform:translateY(6px) scale(.99)}}
 @media(max-width:650px){.dsh-translate .scene-select{min-width:70px;max-width:calc(100% - 190px)}}
 @media(prefers-reduced-motion:reduce){.dsh-translate :is(.more-menu,.select-popover,.dialog-layer,.dialog,.select-chevron){transition:none;transform:none}}
+
+/* Full-height, passive search panel. Reader materials and typography stay shared. */
+.dsh-translate .translation-workspace{position:relative;display:grid;grid-template-columns:minmax(0,1fr);flex:1;min-height:0;overflow:hidden}
+.dsh-translate .translation-workspace[data-search-open=true]{grid-template-columns:minmax(0,1fr) 8px clamp(340px,var(--search-width,400px),46%)}
+.dsh-translate .translation-workspace .reader-scroll{min-width:0;min-height:0}
+.dsh-translate .search-entry.selected{box-shadow:0 0 0 3px rgba(120,120,130,.07),inset 0 1px 0 #fff}
+.dsh-translate .search-pane{min-width:0;min-height:0;display:flex;flex-direction:column;background:var(--search-panel-surface,#fff);color:var(--ink);border-left:1px solid var(--border);opacity:1;transform:none;transition:opacity 160ms ease,transform 180ms cubic-bezier(.2,.8,.2,1)}
+.dsh-translate[data-surface=glass]{--search-panel-surface:rgba(255,255,255,var(--glass-reader,.47))}
+html[data-material-host=native] .dsh-translate[data-surface=glass]{--search-panel-surface:rgba(255,255,255,.20)}
+.dsh-translate .reader-scroll::before,.dsh-translate .reader-scroll::after{content:'';display:block;pointer-events:none;overflow-anchor:none;height:var(--search-scroll-before,0px)}
+.dsh-translate .reader-scroll::after{height:var(--search-scroll-after,0px)}
+.dsh-translate .reader-virtual-space{pointer-events:none;overflow-anchor:none;contain:strict}
+.dsh-translate .search-pane[data-open=false]{opacity:0;transform:translateX(8px);pointer-events:none}
+.dsh-translate .search-pane[data-present=false]{display:none}
+.dsh-translate .search-heading{display:flex;align-items:center;justify-content:space-between;padding:3px 20px 15px;flex:none}
+.dsh-translate .search-heading h2{font-size:15px;font-weight:600;margin:0}
+.dsh-translate .search-icon{width:27px;height:27px;min-width:0;display:grid;place-items:center;padding:0;border-radius:8px;background:transparent;color:#85858f;flex:none}
+.dsh-translate .search-icon svg{width:16px;height:16px}
+.dsh-translate .search-query{padding:0 20px 4px;flex:none;position:relative;z-index:2}
+.dsh-translate .search-field{display:flex;align-items:center;gap:4px;padding:0 9px 0 12px;border:1px solid var(--border);border-radius:12px;background:var(--control);min-height:42px;margin-bottom:9px}
+.dsh-translate .search-field:focus-within{border-color:#a1a1aa;box-shadow:0 0 0 3px rgba(113,113,122,.07)}
+.dsh-translate .search-field>label{display:flex;align-items:center;gap:9px;min-width:0;flex:1}
+.dsh-translate .search-field label>span{font-size:12px;color:#85858f;flex:none}
+.dsh-translate[data-surface] .search-field>label>input[aria-label]{padding:9px 0;width:0;min-width:0;flex:1;background:transparent;border:0;border-radius:0;font-size:14px;outline:none;box-shadow:none!important}
+.dsh-translate .search-field input::placeholder{color:#b0b0b8}
+.dsh-translate .search-clear-field{padding:0;width:20px;height:20px;display:grid;place-items:center;background:transparent;color:#a0a0aa;visibility:hidden}
+.dsh-translate .search-clear-field svg{width:12px;height:12px}
+.dsh-translate .search-field:is(:hover,:focus-within) .search-clear-field{visibility:visible}
+.dsh-translate .search-field .select-control{flex:0 0 auto;width:auto}
+.dsh-translate .search-word-mode.select-trigger{padding:3px 4px;font-size:10px;border:0;background:transparent;gap:1px;min-height:24px;border-radius:6px;color:#85858f}
+.dsh-translate .search-word-mode .select-chevron{width:12px;height:12px}
+.dsh-translate .search-combine{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:#85858f;margin:12px 0 0}
+.dsh-translate .search-combine .segments button{font-size:11px;padding:5px 11px}
+.dsh-translate .search-filter-bar{display:flex;align-items:center;gap:5px;padding:9px 0;min-height:43px}
+.dsh-translate .search-filter-bar>button:first-child{display:flex;align-items:center;gap:5px;padding:4px 3px 4px 0;background:transparent;border-radius:6px;font-size:12px;color:#777781;flex:none}
+.dsh-translate .search-filter-bar>button svg{width:13px;height:13px}
+.dsh-translate .search-filter-bar>button small{min-width:16px;background:#ededf0;border-radius:5px;text-align:center;font-size:10px}
+.dsh-translate .search-summary{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#9999a3}
+.dsh-translate .search-text-button{font-size:10px;padding:4px;background:transparent;color:#9999a3}
+.dsh-translate .search-settings-owner{position:relative;margin-left:auto}
+.dsh-translate .search-settings{position:absolute;top:calc(100% + 6px);right:0;width:250px;padding:14px 16px;z-index:40;border-radius:17px;font-size:12px;animation:search-panel-in 150ms ease}
+.dsh-translate .search-settings strong{display:block;margin-bottom:8px;font-size:12px;font-weight:600}
+.dsh-translate :is(.search-settings,.search-filters)>label{display:flex;align-items:center;gap:9px;min-height:32px;font-size:12px;cursor:pointer;color:#777781}
+.dsh-translate :is(.search-settings,.search-filters) input{accent-color:#62626b;margin:0;width:14px;height:14px}
+.dsh-translate .search-settings small{display:block;font-size:10px;line-height:1.7;color:#a0a0aa;margin-top:9px}
+.dsh-translate .search-filters{padding-bottom:10px;animation:search-panel-in 150ms ease}
+.dsh-translate .search-filters>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-bottom:6px}
+.dsh-translate .search-filters button{padding:5px 2px;min-height:31px;font-size:11px;border:1px solid rgba(140,140,150,.18);border-radius:8px;background:rgba(255,255,255,.5);color:#85858f;white-space:nowrap}
+.dsh-translate .search-filters button[aria-checked=true]{background:#efeff2;border-color:#bfc0c8;color:#44444e}
+.dsh-translate .search-error{font-size:11px;color:#a36b72;line-height:1.7;padding-bottom:10px;overflow-wrap:anywhere}
+.dsh-translate .search-error button{font-size:11px;background:transparent;color:inherit;padding:2px 6px;text-decoration:underline}
+.dsh-translate .search-result-heading{display:flex;justify-content:space-between;align-items:center;min-height:41px;padding:8px 20px;border-top:1px solid rgba(140,140,150,.15);flex:none;font-size:11px;color:#9999a3}
+.dsh-translate .search-result-heading>span{display:flex;align-items:center;gap:7px}
+.dsh-translate .search-result-heading strong{font-weight:500;font-size:12px;color:#777781}
+.dsh-translate .search-result-heading small{font-size:10px}
+.dsh-translate .search-result-list{flex:1;min-height:0;overflow:auto;padding:0 9px 12px;scrollbar-width:thin;overscroll-behavior:contain}
+.dsh-translate .search-result{display:block;width:100%;padding:13px 12px;text-align:left;border-radius:12px;border:1px solid transparent;background:transparent;position:relative}
+.dsh-translate .search-result+.search-result:before{content:'';position:absolute;top:0;left:12px;right:12px;border-top:1px solid rgba(140,140,150,.10)}
+.dsh-translate .search-result[aria-current=true]{background:rgba(130,130,140,.085);border-color:rgba(140,140,150,.1)}
+.dsh-translate .search-result-meta{display:flex;gap:5px;align-items:center;color:#a0a0aa;font-size:10px;line-height:1.6;margin-bottom:6px}
+.dsh-translate .search-result-meta>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:auto}
+.dsh-translate .search-result-meta small{font-size:9px;white-space:nowrap;color:#9d917d}
+.dsh-translate .search-result p{font-size:13px;line-height:1.85;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.dsh-translate .search-result p.search-source{color:#94949f;margin-bottom:3px}
+.dsh-translate .search-result .speaker{color:#788fa9}
+.dsh-translate .search-missing{font-size:11px;color:#aaaab3}
+.dsh-translate .search-empty{padding:50px 12px;text-align:center;color:#a0a0aa;font-size:11px;line-height:1.9}
+.dsh-translate .search-empty>svg{display:block;margin:0 auto 14px;width:24px;height:24px;color:#bdbdc5}
+.dsh-translate .search-empty strong{display:block;font-size:12px;font-weight:500;color:#85858f;margin-bottom:6px}
+.dsh-translate .search-footer{border-top:1px solid rgba(140,140,150,.15);display:flex;justify-content:space-between;align-items:center;min-height:44px;padding:0 15px 0 20px;font-size:10px;color:#9999a3;flex:none}
+.dsh-translate .search-footer>div{display:flex;align-items:center;gap:3px}
+.dsh-translate .search-footer>div>span{min-width:34px;text-align:right;font-size:11px}
+.dsh-translate .search-pages{display:flex;justify-content:center;align-items:center;gap:12px;padding:15px 0;font-size:10px;color:#85858f}
+.dsh-translate .search-pages button{font-size:11px;padding:4px 8px;background:transparent}
+.dsh-translate :is(.paired-text,.search-pane) mark{color:inherit;background:#eee5cf;border-radius:3px;padding:0;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.dsh-translate .paired-text .text-pair.search-located{background:rgba(225,215,192,.13);border-radius:12px;box-shadow:inset 0 0 0 1px rgba(153,139,112,.20);content-visibility:visible}
+.dsh-translate .search-splitter{position:relative;cursor:col-resize;touch-action:none;z-index:3}
+.dsh-translate .search-splitter:before{content:'';position:absolute;top:0;bottom:14px;left:3px;width:1px;background:rgba(140,140,150,.15)}
+.dsh-translate .search-splitter:hover:before{background:#aaaab3}
+.dsh-translate .search-splitter>i{position:absolute;top:0;bottom:14px;left:3px;width:2px;background:#aaaab3;pointer-events:none}
+.dsh-translate .translation-workspace[data-search-open=false]>.search-splitter{display:none}
+.dsh-translate[data-surface=white] .search-pane{background:#fff;backdrop-filter:none;-webkit-backdrop-filter:none}
+@keyframes search-panel-in{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+@media(max-width:900px){.dsh-translate .translation-workspace[data-search-open=true]{grid-template-columns:minmax(0,1fr)}.dsh-translate .search-splitter{display:none}.dsh-translate .search-pane{position:absolute;top:0;right:0;bottom:0;width:min(var(--search-width,400px),calc(100% - 40px));z-index:5;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:-12px 0 35px rgba(0,0,0,.08)}}
+html[data-material-host=native] .dsh-translate[data-surface=glass] .search-pane{backdrop-filter:none;-webkit-backdrop-filter:none}
+/* A narrow window overlays the reader: blur this small panel's web content so
+   text underneath cannot compete with the search fields. The native desktop
+   backdrop remains unchanged, and the regular side-by-side view adds no blur. */
+@media(max-width:900px){html[data-material-host=native] .dsh-translate[data-surface=glass] .search-pane{backdrop-filter:blur(var(--glass-blur,18px));-webkit-backdrop-filter:blur(var(--glass-blur,18px))}}
+@media(max-height:680px){.dsh-translate .search-field{min-height:35px;margin-bottom:6px}.dsh-translate .search-heading{padding-bottom:8px}.dsh-translate .search-filter-bar{min-height:35px;padding:5px 0}.dsh-translate .search-result-heading{min-height:34px}}
+@media(prefers-reduced-motion:reduce){.dsh-translate .search-pane{transition:none;transform:none}.dsh-translate :is(.search-settings,.search-filters){animation:none}}
+
+/* Task progress: the approved B arc, 18 px. Popovers share the existing
+   glass-surface/native material rules rather than introducing another tint. */
+.dsh-translate .reader-header{z-index:8}
+.dsh-translate .scene-select{max-width:calc(100% - 280px)}
+.dsh-translate[data-native=true] .scene-select{max-width:calc(100% - 200px)}
+.dsh-translate .task-progress-owner{position:relative;flex:none;line-height:1.5;user-select:text}
+.dsh-translate .task-progress-entry{background:transparent;border-color:transparent;color:#545960}
+.dsh-translate[data-surface=glass] .task-progress-entry{background:transparent;box-shadow:none}
+.dsh-translate .task-progress-entry:before{content:'';position:absolute;inset:-2px;border-radius:999px}
+.dsh-translate .task-progress-entry[aria-expanded=true]{background:var(--control);border-color:var(--border);box-shadow:0 0 0 3px rgba(120,120,130,.045)}
+.dsh-translate .task-progress-entry .task-progress-ring{width:18px;height:18px}
+.dsh-translate .task-progress-ring{display:block;fill:none;stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round;overflow:visible;color:#545960}
+.dsh-translate .task-progress-track{stroke:rgba(111,118,130,.17)}
+.dsh-translate .task-progress-fill{stroke:currentColor}
+.dsh-translate .task-progress-check{stroke:currentColor;stroke-width:2.5;opacity:0;transition:opacity 160ms}
+.dsh-translate .task-progress-ring[data-complete=true] .task-progress-check{opacity:1}
+.dsh-translate .task-progress-ring.progress-confirm{animation:task-progress-confirm 360ms cubic-bezier(.18,.8,.3,1)}
+.dsh-translate :is(.task-progress-tip,.task-progress-card){position:absolute;right:var(--progress-card-right,-5px);top:calc(100% + 10px);background:#fff;border:1px solid var(--border);box-shadow:0 16px 40px rgba(15,23,42,.08),0 2px 7px rgba(15,23,42,.025);transform-origin:top right;opacity:0;transform:translateY(-3px) scale(.985);pointer-events:none;transition:opacity 110ms ease,transform 130ms cubic-bezier(.2,.8,.2,1)}
+.dsh-translate :is(.task-progress-tip,.task-progress-card)[data-open=true]{opacity:1;transform:none;animation:task-progress-appear 180ms cubic-bezier(.2,.8,.2,1)}
+.dsh-translate .task-progress-card[data-open=true]{pointer-events:auto}
+.dsh-translate .task-progress-tip{width:230px;padding:13px 15px;border-radius:15px;z-index:11}
+.dsh-translate .task-progress-tip>div{display:flex;align-items:baseline;gap:9px;margin-bottom:5px}
+.dsh-translate .task-progress-tip strong{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25}
+.dsh-translate .task-progress-tip>div>span{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.dsh-translate .task-progress-tip>small{font-size:10px;color:var(--muted)}
+.dsh-translate .task-progress-card{width:var(--progress-card-width,316px);padding:16px 17px 0;border-radius:21px;max-height:var(--progress-card-height,calc(100dvh - 110px));overflow:auto;scrollbar-width:none;z-index:12}
+.dsh-translate .task-progress-card::-webkit-scrollbar{display:none;width:0;height:0}
+.dsh-translate .task-progress-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.dsh-translate .task-progress-heading h2{font-size:14px;line-height:1.5;font-weight:600;margin:0;letter-spacing:.02em}
+.dsh-translate .task-progress-close{width:24px;height:24px;padding:0;display:grid;place-items:center;background:transparent;color:var(--muted)}
+.dsh-translate .task-progress-close svg{width:14px;height:14px}
+.dsh-translate .task-progress-scope{width:100%;margin-bottom:16px}
+.dsh-translate .task-progress-scope button{flex:1;font-size:11px;padding:6px 8px;line-height:1.4}
+.dsh-translate .task-progress-overview{display:flex;align-items:center;justify-content:space-between;padding:0 8px 17px 3px;gap:14px}
+.dsh-translate .task-progress-number{font-size:38px;font-weight:550;line-height:1.12;letter-spacing:-1.4px;font-variant-numeric:tabular-nums}
+.dsh-translate .task-progress-number>span+span{font-size:18px;letter-spacing:0;font-weight:450;margin-left:3px;color:var(--muted)}
+.dsh-translate .task-progress-overview p{font-size:11px;line-height:1.5;color:var(--muted);margin:7px 0 0;font-variant-numeric:tabular-nums}
+.dsh-translate .task-progress-detail{width:61px;height:61px;stroke-width:2.8}
+.dsh-translate .task-progress-states{padding:8px 0;border-top:1px solid var(--border)}
+.dsh-translate .task-progress-state{width:100%;display:flex;align-items:center;gap:9px;min-height:34px;border-radius:9px;padding:5px 7px;font-size:11px;text-align:left;background:transparent;transform:none}
+.dsh-translate .task-progress-state:disabled{opacity:1;cursor:default}
+.dsh-translate .task-progress-state:active{transform:none}
+.dsh-translate .task-progress-state>i{width:6px;height:6px;flex:none;border-radius:50%;background:#a9acb3}
+.dsh-translate [data-progress-status=PROCESSED]>i{background:#788a80}
+.dsh-translate [data-progress-status=NEEDS_HUMAN]>i{background:#b6a486}
+.dsh-translate [data-progress-status=ERROR]>i{background:#b28a91}
+.dsh-translate .task-progress-label{color:var(--muted)}
+.dsh-translate .task-progress-state>strong{margin-left:auto;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+.dsh-translate .task-progress-state>small{width:35px;font-size:10px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.dsh-translate .task-progress-state>svg{width:12px;height:12px;margin-left:1px;color:var(--muted);opacity:0;transform:translateX(-2px);transition:opacity 130ms,transform 160ms cubic-bezier(.2,.8,.2,1)}
+.dsh-translate .task-progress-state:is(:hover,:focus-visible):not(:disabled)>svg{opacity:1;transform:none}
+.dsh-translate .task-progress-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--border);padding:11px 3px 13px;font-size:10px;color:var(--muted);min-height:38px}
+.dsh-translate .task-progress-footer>span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsh-translate .task-progress-footer>span+span{flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dsh-translate .task-progress-announcement{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;pointer-events:none}
+@keyframes task-progress-appear{from{opacity:0;transform:translateY(-4px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes task-progress-confirm{0%,100%{transform:scale(1)}45%{transform:scale(1.12)}}
+@media(max-width:650px){.dsh-translate .scene-select{max-width:calc(100% - 240px)}.dsh-translate[data-native=true] .scene-select{max-width:calc(100% - 160px)}}
+@media(prefers-reduced-motion:reduce){.dsh-translate :is(.task-progress-card,.task-progress-tip,.task-progress-ring){animation:none!important;transition:none!important}}

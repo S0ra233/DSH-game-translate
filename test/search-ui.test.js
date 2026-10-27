@@ -1,0 +1,105 @@
+import './workspace.mjs';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { access, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { build } from 'esbuild';
+import { headlessCheck } from './headless-check.mjs';
+
+test('正式检索栏：材质一致、按尺寸居中、完整命中、编辑保护与开合', { timeout: 45000 }, async t => {
+  const browser = process.env.DSH_TEST_BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+  try { await access(browser); } catch { t.skip('需要本机 Chromium'); return; }
+  const folder = await mkdtemp(resolve('.test-output/search-ui-'));
+  const source = `import React from 'react';import {createRoot} from 'react-dom/client';
+    import {App} from ${JSON.stringify(resolve('src/client/App.jsx').replaceAll('\\', '/'))};
+    const tasks=[{id:'n',type:'speaker',text:'ミナ',translation:'米娜',scene_id:'s',revision:1,source_hash:'n',status:'PROCESSED'},
+      {id:'a',type:'dialogue',text:'明日、図書館で。',translation:'明天在图书馆。',speaker:'ミナ',scene_id:'s',revision:1,source_hash:'a',status:'PROCESSED'},
+      {id:'b',type:'dialogue',text:'図書館の窓。',translation:'今天开窗。',speaker:'ミナ',scene_id:'s',revision:1,source_hash:'b',status:'PROCESSED'}];
+    const groups=[{id:'g',title:'测试阅读组',scene_ids:['s'],sections:[],counts:{PROCESSED:3}},{id:'other',title:'其他阅读组',scene_ids:['s'],sections:[],counts:{PROCESSED:3}}];
+    const calls=[];let currentHits=[];
+    const api=async(action,args={})=>{calls.push({action,args});
+      if(action==='snapshot')return {state:{version:1,binding:{project_id:'p',phase:'project_ready'}},stamp:'fixed',models:[]};
+      if(action==='reading-groups')return {groups,next_offset:null};
+      if(action==='reading-group')return {project_id:'p',group:groups.find(g=>g.id===args.group_id),sections:[],tasks,next_offset:null};
+      if(action==='search-close')return {released:true};
+      if(action==='search-query'){
+        const q=args.query,source=q.fields?.source?.text||'',target=q.fields?.target?.text||'';
+        const active=Boolean(source||target||q.statuses?.length),matches=target!=='不匹配'&&(!q.statuses?.length||q.statuses.includes('PROCESSED'));
+        const found=source==='窓'?tasks[2]:tasks[1];
+        currentHits=active&&matches?[{anchor:found.id==='a'?2:3,task_id:found.id,kind:'dialogue',speaker_task_id:'n',label:'其他阅读组',group_id:'other',source:found.text,target:found.translation,speaker_source:'ミナ',speaker_target:'米娜',matches:[{task_id:found.id,kind:'dialogue',fields:{...(source?{source:[source]}:{}),...(target?{target:[target]}:{})},status:'PROCESSED',manual:false}]}]:[];
+        return {project_id:'p',generation:'v',query_key:JSON.stringify(q),active,hits:currentHits,total:currentHits.length,next_cursor:null};
+      }
+      if(action==='search-locate')return {project_id:'p',generation:'v',task_id:args.task_id,group:groups[1],sections:[],tasks:[...tasks]};
+      throw Error('Unexpected action '+action);
+    };
+    document.documentElement.dataset.materialHost='native';
+    localStorage.clear();createRoot(document.getElementById('root')).render(<App api={api} sessionId="search" nativeChrome nativeMaterial/>);
+    const pause=ms=>new Promise(r=>setTimeout(r,ms)),check=(ok,label)=>{if(!ok)throw Error(label)};
+    const $=selector=>document.querySelector(selector);
+    const input=async(label,text)=>{const node=$('input[aria-label="'+label+'"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,text);node.dispatchEvent(new Event('input',{bubbles:true}));await pause(230)};
+    const centered=id=>{const viewport=$('.reader-scroll'),rect=viewport.getBoundingClientRect(),row=$('[data-task-id="'+id+'"]').getBoundingClientRect();return Math.abs(row.top+row.height/2-(rect.top+viewport.clientTop+viewport.clientHeight/2))<3};
+    const theme=async text=>{$('[aria-label="更多操作"]').click();await pause(30);[...document.querySelectorAll('.menu-bottom button')].find(button=>button.textContent===text).click();await pause(40);$('[aria-label="更多操作"]').click();await pause(200)};
+    (async()=>{
+      await pause(250);$('[aria-label="检索"]').click();await pause(250);
+      check($('.search-pane[data-open=true]'),'search opens');
+      const field=$('input[aria-label="检索原文"]');
+      check(getComputedStyle(field).borderTopWidth==='0px'&&getComputedStyle(field).backgroundColor==='rgba(0, 0, 0, 0)','one input surface, no nested outline');
+      await theme('玻璃质感');
+      check(getComputedStyle($('.search-pane')).backgroundColor===getComputedStyle($('.reader-scroll')).backgroundColor,'native search and reader use the same glass surface');
+      check(getComputedStyle($('.search-pane')).backdropFilter==='none','no second native fullscreen blur');
+      check(getComputedStyle(field).borderTopWidth==='0px'&&getComputedStyle(field).backgroundColor==='rgba(0, 0, 0, 0)','glass keeps the single input outline');
+      await theme('纯白');check(getComputedStyle($('.search-pane')).backgroundColor==='rgb(255, 255, 255)','white search surface follows white theme');
+      await input('检索原文','図書館');await input('检索译文','不匹配');
+      check(!$('.search-result'),'no complete hits');check(!$('.paired-text mark'),'half-match must not highlight source');
+      await input('检索译文','明天');check(document.querySelectorAll('.search-result').length===1,'complete hit');
+      check($('[data-task-id="a"] mark'),'accepted task highlighted');check(!$('[data-task-id="b"] mark'),'rejected task with same source word not highlighted');
+      $('.search-filter-bar>button').click();await pause(30);
+      [...document.querySelectorAll('.search-filters button')].find(b=>b.textContent.includes('未翻译')).click();await pause(230);
+      check(!$('.paired-text mark'),'status filtering removes source highlight');
+      [...document.querySelectorAll('.search-filters button')].find(b=>b.textContent.includes('未翻译')).click();await pause(230);
+      $('.search-result').click();await pause(500);
+      check($('[data-task-id="a"].search-located'),'locate real Task');
+      check(centered('a'),'first paragraph is centred, including short content');
+      document.getElementById('root').style.cssText='height:560px;width:960px';await pause(80);
+      $('.search-result').click();await pause(500);check(centered('a'),'repeat jump uses the resized viewport');
+      document.getElementById('root').style.cssText='height:100%;width:100%';await pause(80);
+      await input('检索译文','');await input('检索原文','窓');$('.search-result').click();await pause(500);check(centered('b'),'last paragraph is centred');
+      await input('检索原文','図書館');await input('检索译文','明天');$('.search-result').click();await pause(500);
+      check(calls.some(c=>c.action==='search-locate'),'local neighborhood endpoint');
+      const selected=document.querySelector('select[aria-hidden=true]');check(selected?.value==='other','group synchronized');
+      const edit=$('[data-task-id="a"] .translation-edit-button');edit.click();await pause(40);
+      const area=$('textarea');check(area,'edit opened');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(area,'还没保存');area.dispatchEvent(new Event('input',{bubbles:true}));await pause(40);
+      $('.search-result').click();await pause(60);check($('textarea')?.value==='还没保存','navigation preserves unsaved input');
+      check($('.notice')?.textContent.includes('先保存或取消'),'explain edit guard');
+      [...document.querySelectorAll('.edit-actions button')].find(b=>b.textContent==='取消').click();await pause(100);
+      $('[aria-label="收起检索"]').click();await pause(220);check($('.search-pane[data-present=false]'),'search closes');
+      $('[aria-label="检索"]').click();await pause(230);check($('input[aria-label="检索原文"]').value==='図書館','conditions retained');
+      tasks[2]={...tasks[2],text:'窓の外には長い文章。'.repeat(180)};
+      await input('检索译文','');await input('检索原文','窓');$('.search-result').click();await pause(500);
+      const viewport=$('.reader-scroll'),row=$('[data-task-id="b"]').getBoundingClientRect();
+      check(row.height>viewport.clientHeight&&Math.abs(row.top-viewport.getBoundingClientRect().top-viewport.clientTop-16)<3,'oversized paragraph keeps its opening lines visible');
+      check(!calls.some(c=>['translate','initialize','build','save-model'].includes(c.action)),'passive search only');
+      window.checkNarrow=async()=>{await theme('玻璃质感');await pause(120);
+        check(innerWidth===800,'actual narrow viewport');
+        check(getComputedStyle($('.search-pane')).backdropFilter.startsWith('blur('),'narrow overlay blurs the reading content beneath it');
+        check(getComputedStyle(field).borderTopWidth==='0px','narrow search keeps one input outline');
+        const viewport=$('.reader-scroll'),row=$('[data-task-id="b"]').getBoundingClientRect();
+        check(Math.abs(row.top-viewport.getBoundingClientRect().top-viewport.clientTop-16)<3,'resized long paragraph keeps the opening visible');
+        return true;};
+      document.getElementById('result').textContent=JSON.stringify({ok:true,calls:calls.length});
+    })().catch(error=>document.getElementById('result').textContent=JSON.stringify({error:error.message,stack:error.stack}));`;
+  await writeFile(join(folder, 'check.jsx'), source);
+  await build({ entryPoints: [join(folder, 'check.jsx')], outfile: join(folder, 'check.js'), bundle: true, platform: 'browser', format: 'iife', jsx: 'transform', define: { 'process.env.NODE_ENV': '"production"' } });
+  const html = join(folder, 'check.html');
+  await writeFile(html, `<!doctype html><html><meta charset="utf-8"><style>html,body,#root{height:100%;margin:0}${await readFile('src/client/surface.css', 'utf8')}</style><div id="root"></div><pre id="result">pending</pre><script src="./check.js"></script></html>`);
+  const output = await headlessCheck(browser, folder, html, { exercise: async send => {
+    await send('Runtime.evaluate', { expression: `new Promise(resolve=>{const poll=()=>window.checkNarrow?resolve(true):setTimeout(poll,30);poll()})`, awaitPromise: true });
+    await send('Emulation.setDeviceMetricsOverride', { width: 800, height: 650, deviceScaleFactor: 1, mobile: false });
+    const check = await send('Runtime.evaluate', { expression: 'window.checkNarrow()', awaitPromise: true, returnByValue: true });
+    assert.equal(check.result?.value, true, check.exceptionDetails?.exception?.description || 'narrow layout');
+  } });
+  await writeFile(join(folder, 'result.html'), output);
+  const encoded = /<pre id="result">([^<]*)<\/pre>/.exec(output)?.[1];
+  const report = JSON.parse(encoded.replaceAll('&quot;', '"').replaceAll('&gt;', '>').replaceAll('&lt;', '<').replaceAll('&amp;', '&'));
+  assert.equal(report.ok, true, report.error);
+});

@@ -83,7 +83,7 @@ namespace DshTranslate
         private int serial;
         internal Action<Dictionary<string, object>> Message;
         internal Action Disconnected;
-        internal static readonly HashSet<string> Allowed = new HashSet<string> { "snapshot", "scenes", "scene", "reading-groups", "reading-group", "save-model", "edit-translation", "initialize", "translate", "build", "native-appearance" };
+        internal static readonly HashSet<string> Allowed = new HashSet<string> { "snapshot", "scenes", "scene", "reading-groups", "reading-group", "save-model", "edit-translation", "search-query", "search-locate", "search-close", "initialize", "translate", "build", "native-appearance" };
         internal static Dictionary<string, object> Protocol()
         {
             string[] actions = new string[Allowed.Count]; Allowed.CopyTo(actions);

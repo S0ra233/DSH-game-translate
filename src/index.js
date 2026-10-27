@@ -26,7 +26,7 @@ export function apply(ctx, config = {}) {
   ctx.inject(['llm', 'credentials'], scope => {
     const models = new TranslationModels(scope, service.config.dataDirectory);
     scope.effect(() => () => models.dispose(), 'translation: model routes');
-    return models.load().then(() => { service.models = models; });
+    return service.storageReady().then(() => models.load()).then(() => { service.models = models; });
   });
 
   const root = fileURLToPath(new URL('../skills/game-translation/', import.meta.url));

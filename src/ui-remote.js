@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises';
 import { Remote, TypertRemoteService, principalOf } from '@deepseek-ai/dsh-typert-protocol';
 
 const initializers = [];
-const ACTIONS = new Set(['snapshot', 'scenes', 'scene', 'reading-groups', 'reading-group', 'pick-game', 'pick-output', 'save-model', 'edit-translation']);
+const ACTIONS = new Set(['snapshot', 'scenes', 'scene', 'reading-groups', 'reading-group', 'pick-game', 'pick-output', 'save-model', 'edit-translation', 'search-query', 'search-locate', 'search-close']);
 
 /** 目录与阅读只观察 Session；旧预设缺失不能阻断系统目录选择器。 */
 export class TranslationUi extends TypertRemoteService {
@@ -54,6 +54,7 @@ export class TranslationUi extends TypertRemoteService {
       observation = await this.ctx.sessionQuery.observeSession(sessionId, { signal, projectionMode: 'none' });
       const options = { signal, human: { uiActionId: randomUUID(), rawInput: action } };
       const call = async (operation, value = {}) => (await this.translationService.callObserved(observation, operation, value, options)).data;
+      if (action.startsWith('search-')) return success(await this.translationService.searchObserved(observation, action.replaceAll('-', '_'), args, signal));
       if (action === 'save-model') {
         // 即使只是设置也核对真实根会话，不能借子任务地址修改父工程设置。
         this.translationService.sessionContext(observation.header, observation.events);

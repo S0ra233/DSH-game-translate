@@ -22,7 +22,7 @@ export function mountTranslationUi(ctx) {
   const close = item => { openings = openings.filter(value => value !== item); emit(); };
   const apiFor = sessionId => {
     const api = async (action, args = {}) => {
-    if (['snapshot', 'scenes', 'scene', 'reading-groups', 'reading-group', 'pick-game', 'pick-output', 'save-model', 'edit-translation'].includes(action)) {
+    if (['snapshot', 'scenes', 'scene', 'reading-groups', 'reading-group', 'pick-game', 'pick-output', 'save-model', 'edit-translation', 'search-query', 'search-locate', 'search-close'].includes(action)) {
       const response = await ctx.remote.translationUi.request(sessionId, JSON.stringify({ action, ...args }));
       if (!response.ok) throw new Error(`翻译连接失败：${response.error?.message ?? response.error?.code}`);
       const result = JSON.parse(response.value);
@@ -50,7 +50,7 @@ export function mountTranslationUi(ctx) {
     const item = { sessionId, api: apiFor(sessionId), win, node: null };
     try { if (win) {
       const doc = win.document;
-      doc.title = '游戏翻译';
+      doc.title = 'DSH-game-translate';
       doc.documentElement.lang = 'zh-CN';
       doc.body.style.cssText = 'margin:0;height:100vh;background:#fff;overflow:hidden';
       const style = doc.createElement('style'); style.textContent = css; doc.head.append(style);

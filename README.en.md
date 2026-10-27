@@ -4,11 +4,11 @@
 
 **DSH-game-translate** is a visual, local game translation plugin for [DeepSeek Harness (`dsh`)](https://github.com/deepseek-ai/deepseek-harness). Its code and resources are maintained independently in this directory, without changes to the upstream `game-translation` Core or Harness source.
 
-Enter `/翻译` in a root conversation associated with a working directory to open a separate native translation window. The window handles **directory selection, grouped reading, aligned source/translation views, and manual text edits**. The main conversation Agent coordinates **resource extraction, translation assignments, review, and writing a separate translated game copy** through the bundled `game-translation` Skill and Core.
+Enter `/翻译` in a root conversation associated with a working directory to open a separate native translation window. The window handles **directory selection, grouped reading, aligned source/translation views, search and filters, task progress, and manual text edits**. The main conversation Agent coordinates **resource extraction, translation assignments, review, and writing a separate translated game copy** through the bundled `game-translation` Skill and Core.
 
 The plugin uses DeepSeek Harness's [Cordis-based plugin runtime](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/architecture.md) to separate three responsibilities:
 
-* **Native visual window — browse, select, and edit:** select a game, switch reading groups, compare source and translation in aligned columns, and reveal an edit button on hover. The separate, non-topmost window lets you continue using the main chat.
+* **Native visual window — browse, select, and edit:** select a game, switch reading groups, compare source and translation in aligned columns, search in a sidebar, view task progress, and reveal an edit button on hover. The separate, non-topmost window lets you continue using the main chat.
 * **DSH main/sub-Agent orchestration — translation and multiple models:** the main Agent initializes the project, reviews context and translations, and handles the final build request. It can translate directly or delegate packages to other models through DSH's native sub-Agents, with waiting and duplicate-dispatch protection. The Skill does not implement another Agent loop.
 * **Deterministic translation Core and Skill:** preserve the real `Entry / Task / Scene` state, placeholder and glossary checks, and draft revisions. The workflow keeps the source game read-only, creates a separate translated copy, and reads indexed fields back for verification.
 
@@ -25,13 +25,28 @@ The plugin uses DeepSeek Harness's [Cordis-based plugin runtime](https://github.
 * **Hover to edit:** translated text, the space beside it, and the pencil button share one hover area. The button fades in with a slight upward motion and waits `160 ms` before fading out when you leave. Moving back interrupts the exit transition. System reduced-motion preferences are respected, and double-click text selection/copying remains available.
 * **Save through Core checks:** click the pencil to edit a translation or switch to editing its linked speaker name. Unsaved input must be saved or cancelled before changing the edit target. Use `Ctrl+Enter` to save or `Esc` to cancel. Saves use the host communication channel and Core placeholder/rule checks, **without an LLM call or model-token usage**. An incompatible older window retains your input and asks you to update.
 
-### 3. Native DSH sub-Agents and model protocols
+### 3. Search names, source text, and translations
+
+* **Combine independent fields:** click the magnifier in the upper-right corner or press `Ctrl+F` to open the full-height sidebar. Search original or translated names, source text, and translations separately or together. Fields and keywords each support all/any matching, with space-separated keywords, quoted phrases, and optional punctuation separators.
+* **Filter by task state:** combine untranslated, needs-review, processed, and error states, with an additional manual-edit filter. Search the entire project by default or limit the scope to the current reading group.
+* **Locate matches and keep reading:** click a result to centre it in the reader. Highlights apply only to text that satisfies the complete query and appears on the current results page. Continue reading in either direction across the full group or use the source outline to locate another section. Background updates preserve the reading position and protect unsaved edits.
+* **Background indexing and paged loading:** the plugin maintains its own search index without model calls. Results are paged, larger reading groups load by position, and new input replaces obsolete queries while reusing an ongoing index build for the same project.
+
+### 4. Task progress arc and status details
+
+* **Hover for a summary, click for details:** the arc beside Search shows the processed-task percentage. Hover for counts and a percentage, or click to pin the detail card and switch between the entire project and the current reading group. Click again, click outside, or press `Esc` to close. The card follows the white/glass material setting.
+* **Status details linked to search:** processed, needs-review, untranslated, and error states have separate counts and percentages. Only processed tasks count as complete; manual edits appear as an additional provenance marker. Click a state to open Search with that filter.
+* **Updates after saves, with lightweight motion:** progress refreshes after manual saves and Agent submissions. Hovering, opening the card, and switching scopes reuse cached reading-group statistics. Increases and decreases animate smoothly, stop refreshing when settled, and respect reduced-motion preferences.
+
+Progress counts underlying Tasks, including independent speaker-name tasks, so totals can differ from the merged paragraphs shown in the reader.
+
+### 5. Native DSH sub-Agents and model protocols
 
 * **Four supported protocols:** add or edit translation models in Settings using **OpenAI Chat Completions**, **OpenAI Responses**, **Anthropic Messages**, or **Gemini `generateContent`**. API fields use neutral focus borders and trim leading/trailing whitespace.
 * **Host-managed credentials:** API keys are stored through DSH's `credentials` service, not browser `localStorage`, model configuration JSON, or the plugin's command-argument logs. Encryption at rest depends on the configured DSH credentials backend.
 * **Compact diagnostics:** status and directory tools show summaries by default, with full diagnostics available explicitly. Build and verification reports can be read separately in pages, avoiding repeated diagnostic detail in the main conversation.
 
-### 4. Native Windows window and glass material
+### 6. Native Windows window and glass material
 
 * **Normal window ordering and reuse:** on Windows, the plugin uses an ordinary, non-topmost native window without ownership by the DSH main window. It retains the DSH icon and material styling. Other windows can come to the foreground normally; native folder dialogs use the translation window as their modal owner. Windows are reused briefly for the same conversation, and closing one does not cancel Agent tasks already dispatched. Non-Windows web entry points use browser popup/floating-window fallbacks.
 * **WPF / DWM glass and white surfaces:** the native WPF / DWM material defaults to `5%` milk, `15%` soft light, `100%` edge reflection, `100%` highlight spread, and `20%` reading-surface white. Settings expose milk and soft-light adjustments. White and glass styles share the same reading-area spacing, borders, and scrollbar reservation to preserve layout and wrapping when switching.
@@ -44,7 +59,7 @@ The window currently uses Chinese labels. The names below identify the correspon
 1. **Install the plugin:** install a release package named `dsh-game-translate-<version>.tgz`. Preserve unsaved input before upgrading, then fully exit and restart the target DSH profile. Your DSH account and main-model settings remain the ones you configure in DSH.
 2. **Open the window and select a game:** enter `/翻译` in a working-directory root conversation. Choose `••• → 选择游戏目录…` to open the native Windows folder picker.
 3. **Initialize and extract:** click `初始化` and confirm the model-usage notice. Progress and errors appear in the original conversation. Once resources bind to the root conversation, initialization locks to prevent duplicates. Failed attempts preserve their artifacts for repair and retry.
-4. **Translate, review, and edit:** choose `翻译…`, select pending reading groups, and use the main Agent or native DSH sub-Agents with other models. The window refreshes saved translations after completion. Review both columns and use the pencil for manual edits.
+4. **Translate, review, and edit:** choose `翻译…`, select pending reading groups, and use the main Agent or native DSH sub-Agents with other models. The window refreshes saved translations after completion. Use Search and the progress card to filter untranslated or needs-review content, compare both columns, and use the pencil for manual edits.
 5. **Write a separate game copy:** after reviewing the translations, choose `封装写回…`, select an output location, and confirm. The main Agent uses the Skill/Core to create a new, separate game copy and verify indexed text by reading it back.
 
 > For installation, model configuration, and troubleshooting, see the [usage guide](docs/usage.en.md).

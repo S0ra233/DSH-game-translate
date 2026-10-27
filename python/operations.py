@@ -182,6 +182,17 @@ def project_operation(session, operation, args):
             from reading_groups import build_groups, select_groups
             plan = build_groups(manifest, entries, tasks)
             if operation == "reading_groups":
+                # Add provenance counts while the project is already loaded.
+                # Hovering the progress UI only reads these cached headers.
+                from search_marks import current_marks
+                try:
+                    marks = current_marks(work, manifest["project_id"], tasks)
+                    by_scene = Counter(task["scene_id"] for task in tasks if str(task["id"]) in marks) if marks else {}
+                    for group in plan["groups"]:
+                        group["manual_count"] = sum(by_scene.get(scene, 0) for scene in group["scene_ids"])
+                except (PluginError, OSError, ValueError):
+                    # Provenance metadata must not block the existing reader.
+                    pass
                 offset, limit = page(args)
                 return {"project_id": manifest["project_id"], "rule_version": plan["rule_version"],
                         "capacity": plan["capacity"], "original_scene_count": plan["original_scene_count"],

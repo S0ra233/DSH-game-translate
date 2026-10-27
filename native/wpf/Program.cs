@@ -6,7 +6,7 @@ using System.Windows;
 using System.Xml;
 using System.Xaml;
 
-[assembly: System.Reflection.AssemblyTitle("DSH 游戏翻译")]
+[assembly: System.Reflection.AssemblyTitle("DSH-game-translate")]
 [assembly: System.Reflection.AssemblyVersion("0.3.7.0")]
 
 namespace DshTranslate
@@ -76,6 +76,7 @@ namespace DshTranslate
             Require(!PipeClient.Allowed.Contains("pick-game") && !PipeClient.Allowed.Contains("execute-shell") && PipeClient.Allowed.Contains("translate"), "controlled IPC actions");
             Require(PipeClient.Allowed.Contains("edit-translation"), "manual edit IPC");
             Require(PipeClient.Allowed.Contains("reading-groups") && PipeClient.Allowed.Contains("reading-group"), "reading group IPC");
+            Require(PipeClient.Allowed.Contains("search-query") && PipeClient.Allowed.Contains("search-locate") && PipeClient.Allowed.Contains("search-close"), "passive search IPC");
             Require(BrowserWindow.IsLocalAsset("https://translation.dsh.local/translation-ui.js") && !BrowserWindow.IsLocalAsset("https://example.com/a.js"), "local assets only");
             Require(!BrowserWindow.IsLocalPage("https://translation.dsh.local/translation-ui.html?other"), "page identity");
             string runtime = Microsoft.Web.WebView2.Core.CoreWebView2Environment.GetAvailableBrowserVersionString();

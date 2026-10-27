@@ -56,6 +56,11 @@ def edit_translation(work, manifest, tasks, args, context):
     updated = next(item for item in core.load_project(work)[2] if item["id"] == task["id"])
     result = {"status": "saved", "task": updated, "draft_id": draft_id, "report": report}
     try:
+        from search_marks import record_manual
+        record_manual(work, manifest["project_id"], updated, task["translation"])
+    except (OSError, ValueError, PluginError) as exc:
+        result["notice"] = f"译文已保存，人工来源标记未更新：{exc}。不要重复提交。"
+    try:
         draft.update(status="applied", apply_report=report, applied_at=now())
         save(path, draft)
     except OSError as exc:

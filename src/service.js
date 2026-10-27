@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { readFile, realpath } from 'node:fs/promises';
+import { SearchWorker } from './search-worker.js';
+import { storageLocation, prepareStorage } from './data-directory.js';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -12,7 +14,7 @@ export class TranslationService {
     if (Object.keys(config).some(key => !allowed.includes(key))) throw new Error('dsh-translate 配置含未知字段');
     this.config = {
       pythonExecutable: config.pythonExecutable ?? 'python',
-      dataDirectory: resolve(config.dataDirectory ?? `${ROOT}/.local`),
+      dataDirectory: storageLocation(config.dataDirectory),
       allowedGameRoots: config.allowedGameRoots ?? [],
       allowedWorkRoots: config.allowedWorkRoots ?? [],
       timeoutMs: config.timeoutMs ?? 900_000,
@@ -28,12 +30,31 @@ export class TranslationService {
     for (const key of ['timeoutMs', 'cancelGraceMs']) if (!Number.isSafeInteger(this.config[key]) || this.config[key] < 1) throw new Error(`${key} 须为正整数`);
     this.running = new Set();
     this.closed = false;
+    this.searchWorkers = new Map();
+    this.storageReady = () => this.storagePromise ??= prepareStorage(this.config.dataDirectory, { configured: config.dataDirectory, packageRoot: ROOT });
   }
 
   context(agent, human = {}) {
     const header = agent?.session?.header;
     if (!header?.cwd || agent.id !== header.id) throw new Error('翻译操作需要真实的 DSH 工作目录会话');
     return this.sessionContext(header, agent.session.snapshotEvents(), human);
+  }
+
+  async searchObserved(observation, operation, args, signal) {
+    if (this.closed) throw new Error('翻译插件已卸载');
+    await this.storageReady();
+    // Search needs the authenticated root identity, not conversation text.
+    const context = this.sessionContext(observation.header, []);
+    if (operation === 'search_close') { this.searchWorkers.get(context.sessionId)?.release(args.client_id); return { released: true }; }
+    if (!['search_query', 'search_locate'].includes(operation)) throw new Error('检索操作不正确');
+    let worker = this.searchWorkers.get(context.sessionId);
+    if (!worker || worker.closed) {
+      worker = new SearchWorker(this.config, closed => { if (this.searchWorkers.get(context.sessionId) === closed) this.searchWorkers.delete(context.sessionId); });
+      this.searchWorkers.set(context.sessionId, worker);
+    }
+    const result = await worker.request({ context, config: this.config, operation, args }, signal);
+    if (!result.ok) { const error = new Error(JSON.stringify(result)); error.result = result; throw error; }
+    return result.data;
   }
 
   sessionContext(header, events, human = {}) {
@@ -99,8 +120,11 @@ export class TranslationService {
     return result;
   }
 
-  run(request, signal) {
+  async run(request, signal) {
     signal?.throwIfAborted();
+    await this.storageReady();
+    signal?.throwIfAborted();
+    if (this.closed) throw new Error('翻译插件已卸载');
     return new Promise((accept, reject) => {
       const child = spawn(this.config.pythonExecutable, ['-B', '-u', `${ROOT}/python/bridge.py`], {
         cwd: ROOT, shell: false, windowsHide: true, detached: process.platform !== 'win32',
@@ -169,8 +193,11 @@ export class TranslationService {
 
   async dispose() {
     this.closed = true;
+    const searches = [...this.searchWorkers.values()];
+    for (const worker of searches) worker.close();
     const running = [...this.running];
     for (const entry of running) entry.stop(new Error('插件卸载，正在停止后台作业'));
     await Promise.all(running.map(entry => entry.done));
+    await Promise.all(searches.map(worker => worker.done));
   }
 }

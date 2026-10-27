@@ -1,6 +1,6 @@
 {
   "name": "dsh-game-translate",
-  "version": "0.3.8",
+  "version": "0.9.3",
   "description": "Conversation-bound game translation tools powered by the portable Game Translation Core",
   "type": "module",
   "main": "src/index.js",

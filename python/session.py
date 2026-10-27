@@ -17,6 +17,8 @@ class TranslationSession:
         self.state = load(self.state_file, {"schema_version": 1, "session_id": context["sessionId"],
             "workspace": str(self.workspace), "version": 0, "binding": None,
             "pending": None, "notice": None, "grants": []})
+        if self.state.get("schema_version") != 1:
+            raise PluginError("unsupported_state_version", "绑定数据版本暂不受支持，请使用兼容的插件版本；原数据已保留。")
         if self.state["workspace"] != str(self.workspace):
             raise PluginError("workspace_changed", "该根会话的工作目录与已有绑定记录不同，请核对会话。")
         self.game_roots = [self.workspace, *map(Path, config["allowedGameRoots"]),

@@ -5,6 +5,11 @@ import { coalesceRefresh } from './refresh-queue.js';
 import { readReadingGroupPages } from './scene-reader.js';
 import { PairedText } from './Reader.jsx';
 import { Select, usePresence } from './Select.jsx';
+import { SearchPane, SearchSplitter, SearchIcon } from './SearchPane.jsx';
+import { centerReaderTarget } from './reader-navigation.js';
+import { ReadingWindow } from './reading-window.js';
+import { TaskProgress } from './TaskProgress.jsx';
+import { groupProgress, projectProgress } from './progress-model.js';
 
 const PROTOCOLS = [['openai-completions', 'OpenAI Chat Completions'], ['openai-responses', 'OpenAI Responses'],
   ['anthropic-messages', 'Anthropic Messages'], ['google-generative-ai', 'Gemini generateContent']];
@@ -26,6 +31,16 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
   const [nativeExpanded, setNativeExpanded] = useState(false);
   const [adjustingFrost, setAdjustingFrost] = useState(false);
   const [editingCount, setEditingCount] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false), [searchHits, setSearchHits] = useState([]), [locatedTask, setLocatedTask] = useState(null);
+  const [locateRequest, setLocateRequest] = useState(0);
+  const [searchWidth, setSearchWidth] = useState(() => { try { const value = Number(ownerWindow.localStorage.getItem('dsh-translate.search-width')); return value >= 340 && value <= 520 ? value : 400; } catch { return 400; } });
+  const shownSearch = usePresence(searchOpen), searchLocation = useRef(null), searchLocateEpoch = useRef(0), reader = useRef(null), pendingAnchor = useRef(null);
+  const [readingWindow, setReadingWindow] = useState(null);
+  const [progressFilter, setProgressFilter] = useState(null);
+  const [progressVisible, setProgressVisible] = useState(true);
+  const windowReader = useRef(null), centering = useRef(null), windowFlight = useRef(null), scrollFrame = useRef(null);
+  const readerVisible = useRef(true);
+  const continueReading = useRef(null);
   const editors = useRef(new Set());
   const onEditing = useCallback((id, active) => {
     if (active && editors.current.size && !editors.current.has(id)) return false;
@@ -42,7 +57,26 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
   const pending = Boolean(snapshot?.state.pending), models = snapshot?.models ?? [];
   const pendingScenes = useMemo(() => scenes.filter(row => Object.entries(row.counts ?? {}).some(([status, count]) => status !== 'PROCESSED' && count > 0)), [scenes]);
   const sceneOptions = useMemo(() => scenes.map(row => <option key={row.id} value={row.id} title={row.file}>{row.title || row.id}</option>), [scenes]);
+  const totalProgress = useMemo(() => projectProgress(scenes), [scenes]);
+  const currentProgress = useMemo(() => groupProgress(scenes.find(row => row.id === sceneId)), [scenes, sceneId]);
   currentScene.current = sceneId;
+
+  const captureReader = useCallback(() => {
+    const container = reader.current;
+    if (!container) return;
+    centering.current?.cancel();
+    const top = container.getBoundingClientRect().top + container.clientTop;
+    const node = [...container.querySelectorAll('[data-task-id]')].find(item => { const rect = item.getBoundingClientRect(); return rect.bottom > top + 15 && rect.top < top + container.clientHeight; });
+    pendingAnchor.current = node ? { id: node.dataset.taskId, offset: node.getBoundingClientRect().top - top } : { scrollTop: container.scrollTop };
+  }, []);
+
+  const publishWindow = useCallback((page, direction = 'around') => {
+    captureReader();
+    const model = direction === 'around' || !windowReader.current ? new ReadingWindow(page) : windowReader.current;
+    const view = direction === 'around' ? model.view() : model.add(page, direction);
+    windowReader.current = model;
+    setTasks(view.tasks); setSections(view.sections); setReadingWindow(view);
+  }, [captureReader]);
 
   const savePreference = changes => {
     const value = cleanAppearance({ ...preferences, ...changes });
@@ -86,16 +120,18 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
 
   const readScene = useCallback(async (id, projectId) => {
     const epoch = ++sceneEpoch.current;
+    windowReader.current = null; setReadingWindow(null);
     setReadingScene(true);
-    try { await readReadingGroupPages({ api, projectId, groupId: id, current: () => epoch === sceneEpoch.current, publish: setTasks, sections: setSections }); }
+    try { await readReadingGroupPages({ api, projectId, groupId: id, current: () => epoch === sceneEpoch.current && readerVisible.current && !editors.current.size,
+      publish: rows => { captureReader(); setTasks(rows); }, sections: setSections }); }
     finally { if (epoch === sceneEpoch.current) setReadingScene(false); }
-  }, [api]);
+  }, [api, captureReader]);
 
   const readSnapshot = useCallback(async () => {
-    if (editors.current.size) return;
+    if (editors.current.size || !readerVisible.current) return;
     const epoch = ++refreshEpoch.current;
     const value = await api('snapshot');
-    if (editors.current.size) return;
+    if (editors.current.size || !readerVisible.current) return;
     if (epoch !== refreshEpoch.current) return;
     const serialized = JSON.stringify(value);
     if (serialized !== snapshotStamp.current) { snapshotStamp.current = serialized; setSnapshot(value); }
@@ -103,11 +139,11 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
     const key = `${value.state.binding?.project_id ?? ''}:${value.state.version}:${value.stamp}`;
     if (key === last.current) return;
     last.current = key;
-    if (value.state.binding?.phase !== 'project_ready') { sceneEpoch.current++; setReadingScene(false); setScenes([]); setSceneId(''); setTasks([]); setSections([]); return; }
+    if (value.state.binding?.phase !== 'project_ready') { sceneEpoch.current++; windowReader.current = null; setReadingWindow(null); searchLocation.current = null; setSearchHits([]); setReadingScene(false); setScenes([]); setSceneId(''); setTasks([]); setSections([]); return; }
     const all = []; let offset = 0;
     do {
       const result = await api('reading-groups', { project_id: value.state.binding.project_id, offset, limit: 200 });
-      if (epoch !== refreshEpoch.current) return;
+      if (epoch !== refreshEpoch.current || !readerVisible.current) return;
       all.push(...result.groups); offset = result.next_offset;
     } while (offset !== null);
     setScenes(all);
@@ -116,14 +152,26 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
     const match = id => all.find(row => row.id === id || row.scene_ids?.includes(id));
     const chosen = (match(currentScene.current) ?? match(stored) ?? all[0])?.id ?? '';
     setSceneId(chosen);
-    if (chosen) void readScene(chosen, value.state.binding.project_id).catch(failure => { last.current = ''; setError(toMessage(failure)); });
-  }, [api, ownerWindow, readScene, sessionId]);
+    if (chosen && searchLocation.current?.group_id === chosen) {
+      try {
+        const pid = value.state.binding.project_id;
+        const top = reader.current?.getBoundingClientRect().top ?? 0;
+        const visible = [...(reader.current?.querySelectorAll('[data-task-id]') ?? [])].find(node => node.getBoundingClientRect().bottom > top + 15);
+        const target = await api('search-locate', { project_id: pid, task_id: visible?.dataset.taskId ?? searchLocation.current.task_id,
+          query: {}, rebase: true, client_id: `reader-refresh-${sessionId}` });
+        if (epoch === refreshEpoch.current && readerVisible.current && !editors.current.size) {
+          if (target.window) publishWindow(target);
+          else { captureReader(); setTasks(target.tasks); setSections(target.sections); }
+        }
+      } catch (failure) { if (epoch === refreshEpoch.current && readerVisible.current) setError(toMessage(failure)); }
+    } else if (chosen) void readScene(chosen, value.state.binding.project_id).catch(failure => { last.current = ''; setError(toMessage(failure)); });
+  }, [api, ownerWindow, readScene, sessionId, publishWindow, captureReader]);
   const refresh = useMemo(() => coalesceRefresh(readSnapshot), [readSnapshot]);
   const edited = useCallback(task => {
     sceneEpoch.current++; refreshEpoch.current++;
-    if (task) setTasks(rows => rows.map(row => row.id === task.id ? task : row));
+    if (task) { captureReader(); setTasks(rows => rows.map(row => row.id === task.id ? task : row)); }
     last.current = ''; void refresh().catch(failure => setError(toMessage(failure)));
-  }, [refresh]);
+  }, [refresh, captureReader]);
 
   useEffect(() => {
     let closed = false, timer;
@@ -133,14 +181,23 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
     };
     const changed = name => {
       ownerWindow.clearTimeout(timer);
-      if (name === 'window-hidden') { refresh.cancelPending(); setMenu(false); setDialog(null); setModelForm(emptyModel()); setShowKey(false); return; }
+      if (name === 'window-hidden') {
+        setProgressVisible(false);
+        readerVisible.current = false; last.current = ''; setReadingScene(false);
+        for (const kind of ['navigation', 'pages', 'refresh']) void api('search-close', { client_id: `reader-${kind}-${sessionId}` }).catch(() => {});
+        refresh.cancelPending(); setMenu(false); setDialog(null); setModelForm(emptyModel()); setShowKey(false); return;
+      }
+      readerVisible.current = true;
+      setProgressVisible(true);
       timer = ownerWindow.setTimeout(tick, 350);
     };
+    const visibility = () => changed(ownerWindow.document.hidden ? 'window-hidden' : 'refresh');
     const unsubscribe = api.subscribe?.(changed);
     ownerWindow.addEventListener('focus', changed);
+    ownerWindow.document.addEventListener('visibilitychange', visibility);
     void tick();
-    return () => { closed = true; refresh.cancelPending(); unsubscribe?.(); ownerWindow.removeEventListener('focus', changed); ownerWindow.clearTimeout(timer); refreshEpoch.current++; sceneEpoch.current++; };
-  }, [api, refresh, ownerWindow]);
+    return () => { closed = true; refresh.cancelPending(); unsubscribe?.(); ownerWindow.removeEventListener('focus', changed); ownerWindow.document.removeEventListener('visibilitychange', visibility); ownerWindow.clearTimeout(timer); refreshEpoch.current++; sceneEpoch.current++; };
+  }, [api, refresh, ownerWindow, sessionId]);
 
   useEffect(() => {
     const changed = () => setNativeExpanded(Boolean(ownerWindow.document.fullscreenElement));
@@ -166,7 +223,7 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
   useEffect(() => {
     if (!dialog) return;
     const active = ownerWindow.document.activeElement;
-    const popup = root.current?.querySelector('[role="dialog"]');
+    const popup = root.current?.querySelector('.dialog[role="dialog"]');
     popup?.querySelector('button,input,select')?.focus();
     const trap = event => {
       if (event.key !== 'Tab') return;
@@ -189,6 +246,9 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
   const close = () => { setDialog(null); setShowKey(false); };
   const choose = () => perform(async () => { setDialog(null); await api('pick-game'); last.current = ''; await refresh(); });
   const changeScene = async event => {
+    centering.current?.(); centering.current = null; pendingAnchor.current = null;
+    windowReader.current = null; setReadingWindow(null);
+    searchLocation.current = null; ++searchLocateEpoch.current; setLocatedTask(null);
     const id = event.target.value; setSceneId(id); setTasks([]); setSections([]); setError('');
     try { ownerWindow.localStorage.setItem(`dsh-translate.group:${sessionId}:${snapshot.state.binding.project_id}`, id); await readScene(id, snapshot.state.binding.project_id); }
     catch (failure) { setError(toMessage(failure)); }
@@ -201,8 +261,99 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
   });
   const modelChange = (field, value) => setModelForm(form => ({ ...form, [field]: value }));
   const openSettings = () => { setSettingsTab('appearance'); setDialog('settings'); setModelForm(emptyModel()); };
+  const toggleSearch = value => { captureReader(); setSearchOpen(value); };
+  const filterProgress = (status, scope) => {
+    if (editors.current.size) { setNotice('请先保存或取消当前译文，再切换进度筛选。'); return false; }
+    captureReader(); setProgressFilter({ status, scope }); setSearchOpen(true); return true;
+  };
+  useLayoutEffect(() => {
+    const anchor = pendingAnchor.current, container = reader.current;
+    if (!anchor || !container) return;
+    const node = [...container.querySelectorAll('[data-task-id]')].find(item => item.dataset.taskId === anchor.id);
+    if (node) container.scrollTop += node.getBoundingClientRect().top - container.getBoundingClientRect().top - container.clientTop - anchor.offset;
+    else if (anchor.edge) container.scrollTop = anchor.edge === 'end' ? container.scrollHeight : 0;
+    else if (anchor.scrollTop !== undefined) container.scrollTop = anchor.scrollTop;
+    pendingAnchor.current = null;
+  }, [shownSearch, searchWidth, tasks, readingWindow]);
+  useLayoutEffect(() => {
+    if (!locatedTask || !reader.current) return;
+    const container = reader.current, node = [...container.querySelectorAll('[data-task-id]')].find(item => item.dataset.taskId === String(locatedTask));
+    if (node) { centering.current = centerReaderTarget(container, node, ownerWindow, () => onReaderScroll()); return () => { centering.current?.(); centering.current = null; }; }
+  }, [locateRequest, ownerWindow]);
+  const acceptedSearch = useCallback(hits => { setSearchHits(hits); setLocatedTask(current => hits.some(hit => hit.task_id === current) ? current : null); }, []);
+  const locateSearch = async hit => {
+    if (editors.current.size) { setNotice('请先保存或取消当前译文，再跳转检索结果。'); return false; }
+    const epoch = ++searchLocateEpoch.current, pid = snapshot?.state.binding?.project_id;
+    const target = await api('search-locate', { project_id: pid, anchor: hit.anchor, task_id: hit.task_id, generation: hit.generation,
+      section_id: hit.section_id, group_id: hit.group_id, rebase: Boolean(hit.section_id), query: hit.query ?? {}, client_id: `reader-navigation-${sessionId}` });
+    if (epoch !== searchLocateEpoch.current || target.project_id !== pid || editors.current.size) return false;
+    ++sceneEpoch.current; ++refreshEpoch.current; setReadingScene(false);
+    searchLocation.current = { task_id: target.task_id, anchor: hit.anchor, group_id: target.group.id };
+    setSceneId(target.group.id);
+    if (target.window) publishWindow(target);
+    else { windowReader.current = null; setReadingWindow(null); setTasks(target.tasks); setSections(target.sections); }
+    pendingAnchor.current = null;
+    setLocatedTask(target.task_id);
+    setLocateRequest(value => value + 1);
+    try { ownerWindow.localStorage.setItem(`dsh-translate.group:${sessionId}:${pid}`, target.group.id); } catch {}
+    return true;
+  };
+  const readMore = useCallback(async () => {
+    const model = windowReader.current, container = reader.current;
+    if (!model || !container || windowFlight.current || editors.current.size || centering.current?.navigating || !readerVisible.current || ownerWindow.document.hidden) return;
+    const view = model.view(), rect = container.getBoundingClientRect();
+    const content = container.querySelector('.paired-text')?.getBoundingClientRect();
+    if (!content) return;
+    const margin = container.clientHeight * .6;
+    let cursor, direction;
+    if (content.top > rect.top + container.clientHeight || content.bottom < rect.top) {
+      direction = 'around'; cursor = model.cursor(Math.round(container.scrollTop / Math.max(1, container.scrollHeight-container.clientHeight) * (view.total-1)));
+    } else if (view.before && content.top > rect.top - margin) { direction = 'before'; cursor = view.before; }
+    else if (view.after && content.bottom < rect.bottom + margin) { direction = 'after'; cursor = view.after; }
+    if (!cursor) return;
+    const epoch = sceneEpoch.current, request = {};
+    const scrollStart = container.scrollTop;
+    const edge = scrollStart < 2 ? 'start' : scrollStart + container.clientHeight >= container.scrollHeight-2 ? 'end' : null;
+    let skipped = false;
+    windowFlight.current = request;
+    try {
+      const page = await api('search-locate', { project_id: model.projectId, generation: model.generation,
+        window_cursor: cursor, direction, query: {}, client_id: `reader-pages-${sessionId}` });
+      if (epoch === sceneEpoch.current && windowReader.current === model && readerVisible.current && !editors.current.size) {
+        if (Math.abs(container.scrollTop-scrollStart) > container.clientHeight) { skipped = true; return; }
+        publishWindow(page, direction);
+        if (edge && pendingAnchor.current?.scrollTop !== undefined) pendingAnchor.current.edge = edge;
+        setError('');
+      }
+    } catch (failure) {
+      if (epoch === sceneEpoch.current && windowReader.current === model && readerVisible.current) {
+        if (toMessage(failure).includes('已更新')) { last.current = ''; void refresh().catch(error => setError(toMessage(error))); }
+        else setError(toMessage(failure));
+      }
+    } finally {
+      if (windowFlight.current === request) windowFlight.current = null;
+      if (skipped) ownerWindow.requestAnimationFrame(() => { void continueReading.current?.(); });
+    }
+  }, [api, ownerWindow, publishWindow, refresh, sessionId]);
+  continueReading.current = readMore;
+  const locateSection = id => { void locateSearch({ section_id: id, group_id: sceneId }).catch(failure => setError(toMessage(failure))); };
+  const onReaderScroll = useCallback(() => {
+    if (scrollFrame.current !== null) return;
+    scrollFrame.current = ownerWindow.requestAnimationFrame(() => { scrollFrame.current = null; void readMore(); });
+  }, [ownerWindow, readMore]);
+  useEffect(() => { onReaderScroll(); }, [readingWindow, editingCount, onReaderScroll]);
+  useEffect(() => () => { ownerWindow.cancelAnimationFrame(scrollFrame.current); sceneEpoch.current++; }, [ownerWindow]);
+  useEffect(() => {
+    centering.current?.(); centering.current = null; pendingAnchor.current = null;
+    ++searchLocateEpoch.current; searchLocation.current = null; setSearchHits([]); setLocatedTask(null);
+    setProgressFilter(null);
+  }, [snapshot?.state.binding?.project_id]);
+  useEffect(() => {
+    const key = event => { if (ready && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') { event.preventDefault(); captureReader(); setSearchOpen(true); } };
+    ownerWindow.addEventListener('keydown', key); return () => ownerWindow.removeEventListener('keydown', key);
+  }, [ready, ownerWindow]);
   const style = { '--reader-font-size': `${preferences.fontSize}px`, '--reader-line-height': preferences.lineHeight,
-    '--reader-left': `${preferences.ratio}fr`, '--reader-right': `${100-preferences.ratio}fr`, '--reader-font': preferences.font === 'serif' ? '"Noto Serif CJK SC", "Songti SC", SimSun, serif' : 'system-ui, "Segoe UI", "Microsoft YaHei", sans-serif' };
+    '--search-width': `${searchWidth}px`, '--reader-left': `${preferences.ratio}fr`, '--reader-right': `${100-preferences.ratio}fr`, '--reader-font': preferences.font === 'serif' ? '"Noto Serif CJK SC", "Songti SC", SimSun, serif' : 'system-ui, "Segoe UI", "Microsoft YaHei", sans-serif' };
 
   return <div ref={root} className="dsh-translate" data-surface={preferences.surface} data-native={nativeChrome || undefined} style={style}>
     <header className={`reader-header${headerProps ? ' draggable-header' : ''}`} {...headerProps}>
@@ -212,6 +363,8 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
       </Select>
       {!initialized && <span className="uninitialized">未初始化</span>}
       <div className="header-space" />
+      <TaskProgress key={snapshot?.state.binding?.project_id ?? 'unbound'} project={totalProgress} group={currentProgress} groupId={sceneId} groupLabel={scenes.find(row => row.id === sceneId)?.title ?? '当前阅读组'} ready={ready} visible={progressVisible} dismissed={Boolean(menu || dialog)} canFilter={!editingCount} onStatus={filterProgress} onOpen={() => setMenu(false)} ownerWindow={ownerWindow} />
+      <button className={`icon-pill search-entry${searchOpen ? ' selected' : ''}`} aria-label="检索" title="检索 · Ctrl+F" aria-expanded={searchOpen} disabled={!ready} onClick={() => toggleSearch(!searchOpen)}><SearchIcon name="search" /></button>
       <div className="menu-owner" ref={menuOwner}>
         <button className="icon-pill" aria-label="更多操作" aria-expanded={menu} disabled={editingCount > 0} onClick={() => { setMenu(!menu); if (!menu) void refresh().catch(failure => setError(toMessage(failure))); }}>•••</button>
         {shownMenu && <div className="more-menu glass-surface" role="menu" data-open={menu} aria-hidden={!menu} inert={menu ? undefined : ''}>
@@ -228,9 +381,15 @@ export function App({ api, sessionId, ownerWindow = window, onClose, onExpand, m
     </header>
     {(error || notice) && <div className={`notice ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}><span>{error || notice}</span><button aria-label="关闭提示" onClick={() => { setError(''); setNotice(''); }}>×</button></div>}
     {snapshot?.agentIssue && <div className="notice agent-issue" role="status"><span>{snapshot.agentIssue}</span></div>}
-    <main className="reader-scroll" aria-label="原文与已保存译文对照">
-      {tasks.length ? <PairedText tasks={tasks} sections={sections} api={api} projectId={snapshot?.state.binding?.project_id} onEditing={onEditing} onSaved={edited} /> : <div className="empty-reader">{readingScene ? <><span className="small-spinner" />正在读取场景…</> : pending ? <><span className="small-spinner" />初始化正在进行，处理信息在原对话中。</> : snapshot?.state.initialization_error ? <>初始化未完成，请在原对话查看原因，修复后可重试。</> : initialized ? '资源已绑定，等待 Agent 完成翻译工程准备。' : '从右上角选择游戏目录，然后初始化。'}</div>}
-    </main>
+    <div className="translation-workspace" data-search-open={Boolean(shownSearch && ready)}>
+      <main ref={reader} className="reader-scroll" aria-label="原文与已保存译文对照" onScroll={onReaderScroll}>
+        {readingWindow && <div className="reader-virtual-space" aria-hidden="true" style={{ height: readingWindow.beforeHeight }} />}
+        {tasks.length ? <PairedText tasks={tasks} sections={sections} allSections={windowReader.current?.group.sections} onSection={readingWindow ? locateSection : undefined} api={api} projectId={snapshot?.state.binding?.project_id} onEditing={onEditing} onSaved={edited} searchHits={searchHits} locatedTask={locatedTask} /> : <div className="empty-reader">{readingScene ? <><span className="small-spinner" />正在读取场景…</> : pending ? <><span className="small-spinner" />初始化正在进行，处理信息在原对话中。</> : snapshot?.state.initialization_error ? <>初始化未完成，请在原对话查看原因，修复后可重试。</> : initialized ? '资源已绑定，等待 Agent 完成翻译工程准备。' : '从右上角选择游戏目录，然后初始化。'}</div>}
+        {readingWindow && <div className="reader-virtual-space" aria-hidden="true" style={{ height: readingWindow.afterHeight }} />}
+      </main>
+      {ready && <><SearchSplitter width={searchWidth} onChange={width => { captureReader(); setSearchWidth(width); try { ownerWindow.localStorage.setItem('dsh-translate.search-width', String(width)); } catch {} }} />
+        <SearchPane key={snapshot.state.binding.project_id} api={api} projectId={snapshot.state.binding.project_id} groupId={sceneId} stamp={snapshot.stamp} open={searchOpen} present={shownSearch} onClose={() => toggleSearch(false)} onResults={acceptedSearch} onLocate={locateSearch} locatedTask={locatedTask} ownerWindow={ownerWindow} filterRequest={progressFilter} /></>}
+    </div>
     {shownDialog && <div className="dialog-layer" data-open={Boolean(dialog)} aria-hidden={!dialog} inert={dialog ? undefined : ''} onMouseDown={event => { if (event.target === event.currentTarget && !busy) close(); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="dialog-title" className={`dialog glass-surface ${shownDialog === 'settings' ? 'settings-dialog' : ''}`}>
         <div className="dialog-heading"><h2 id="dialog-title">{{ switch: '切换游戏目录', initialize: '初始化', translate: '翻译', build: '封装写回', settings: '设置' }[shownDialog]}</h2><button className="close-button" aria-label="关闭" onClick={close} disabled={busy}>×</button></div>

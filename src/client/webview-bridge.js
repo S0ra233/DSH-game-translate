@@ -6,6 +6,7 @@ export function createHostBridge({ send, notify = () => {} }) {
   const api = (action, args = {}) => new Promise((resolve, reject) => {
     if (disposed) return reject(new Error('翻译窗口已关闭'));
     if (action === 'edit-translation' && hostActions !== undefined && !hostActions.has(action)) return reject(new Error('当前翻译窗口与插件版本不一致，请先复制保留当前输入，完全退出 DSH 后重新打开翻译窗口；本次修改尚未保存。'));
+    if (action.startsWith('search-') && hostActions !== undefined && !hostActions.has(action)) return reject(new Error('当前原生窗口尚未加载检索接口，请更新插件并重新打开翻译窗口。'));
     if (['reading-groups', 'reading-group'].includes(action) && hostActions !== undefined && !hostActions.has(action)) return reject(new Error('当前翻译窗口与插件版本不一致，请完全退出 DSH 后重新打开，以加载阅读分组；工程内容未修改。'));
     const id = `web-${++serial}`; pending.set(id, { resolve, reject });
     send({ kind: 'request', id, action, args });

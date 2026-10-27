@@ -2,10 +2,25 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 
 // Use real frame timing. --dump-dom virtual time can finish while CSS transitions
 // and content-visibility are still pending, creating false layout failures.
 export async function headlessCheck(browser, folder, html, { exercise } = {}) {
+  // A supplied local automation runtime uses a pipe rather than a loopback CDP
+  // port. This also works on hosts whose policies/proxy block debugger ports.
+  if (process.env.DSH_PLAYWRIGHT_MODULE) {
+    const { chromium } = createRequire(import.meta.url)(process.env.DSH_PLAYWRIGHT_MODULE);
+    const instance = await chromium.launch({ executablePath: browser, headless: true });
+    try {
+      const page = await instance.newPage({ viewport: { width: 1280, height: 900 } });
+      await page.goto(pathToFileURL(html).href);
+      const protocol = await page.context().newCDPSession(page);
+      if (exercise) await exercise((method, params = {}) => protocol.send(method, params));
+      await page.waitForFunction(() => { const node = document.getElementById('result'); return node && node.textContent !== 'pending'; }, null, { timeout: 25000 });
+      return await page.content();
+    } finally { await instance.close(); }
+  }
   const profile = join(folder, 'browser-profile');
   const child = spawn(browser, ['--headless=new', '--disable-gpu', '--disable-software-rasterizer', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--disable-extensions', '--host-resolver-rules=MAP * ~NOTFOUND', '--user-data-dir=' + profile, '--window-size=1280,900', '--remote-debugging-port=0', pathToFileURL(html).href], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
   let error = '', closed = false, socket;
